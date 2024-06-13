@@ -1139,10 +1139,10 @@
 (assert_malformed
   (module binary
     "\00asm" "\01\00\00\00"
-    "\0c\01\03"                   ;; Datacount section with value "3"
     "\0b\05\02"                   ;; Data section with two entries
     "\01\00"                      ;; Passive data section
-    "\01\00")                     ;; Passive data section
+    "\01\00"                      ;; Passive data section
+    "\0c\01\03")                  ;; Datacount section with value "3"
   "data count and data section have inconsistent lengths")
 
 ;; More passive segments than datacount

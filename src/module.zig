@@ -99,11 +99,11 @@ pub const Module = struct {
         // See https://github.com/malcolmstill/zware/pull/133
         try self.parsed_code.append(.@"return");
 
-        var i: usize = 0;
-        while (true) : (i += 1) {
-            decoder.decodeSection(self) catch |err| switch (err) {
+        var previous_section: ?SectionType = null;
+        while (true) {
+            previous_section = decoder.decodeSection(self, previous_section) catch |err| switch (err) {
                 error.WasmFileEnd => break,
-                else => return err,
+                else => |e| return e,
             };
             try self.verify();
         }
@@ -147,10 +147,15 @@ pub const Module = struct {
     }
 };
 
+fn leftMayNotOccurBefore(left: SectionType, right: SectionType) bool {
+    if (left == .Custom or right == .Custom) return false;
+    return @intFromEnum(left) > @intFromEnum(right);
+}
+
 pub const Decoder = struct {
     fbs: std.io.FixedBufferStream([]const u8),
 
-    pub fn decodeSection(self: *Decoder, module: *Module) !void {
+    pub fn decodeSection(self: *Decoder, module: *Module, previous_section: ?SectionType) !SectionType {
         const id: SectionType = self.readEnum(SectionType) catch |err| switch (err) {
             error.EndOfStream => return error.WasmFileEnd,
             else => return err,
@@ -159,6 +164,13 @@ pub const Decoder = struct {
         const size = try self.readULEB128(u32);
 
         const section_start = self.fbs.pos;
+
+        if (previous_section) |s| {
+            if (leftMayNotOccurBefore(s, id)) {
+                std.log.err("the {s} section may not occur before the {s} section", .{@tagName(s), @tagName(id)});
+                return error.WasmSectionOrder;
+            }
+        }
 
         switch (id) {
             .Custom => try self.decodeCustomSection(module, size),
@@ -178,6 +190,7 @@ pub const Decoder = struct {
 
         const section_end = self.fbs.pos;
         if (section_end - section_start != size) return error.MalformedSectionMismatchedSize;
+        return id;
     }
 
     fn decodeTypeSection(self: *Decoder, module: *Module) !void {
