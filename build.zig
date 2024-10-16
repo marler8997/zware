@@ -10,6 +10,24 @@ pub fn build(b: *Build) !void {
 
     try b.modules.put(b.dupe("zware"), zware_module);
 
+    {
+        const exe = b.addExecutable(.{
+            .name = "zware-run",
+            .root_source_file = b.path("src/cmdlinerunner.zig"),
+            .target = target,
+            .optimize = optimize,
+        });
+        exe.root_module.addImport("zware", zware_module);
+        const install = b.addInstallArtifact(exe, .{});
+        b.getInstallStep().dependOn(&install.step);
+        const run = b.addRunArtifact(exe);
+        run.step.dependOn(&install.step);
+        if (b.args) |args| {
+            run.addArgs(args);
+        }
+        b.step("run", "Run the cmdline runner zware-run").dependOn(&run.step);
+    }
+
     const lib = b.addStaticLibrary(.{
         .name = "zware",
         .root_source_file = b.path("src/main.zig"),
